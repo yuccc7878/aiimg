@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-  <title>Lite Tavern · 网页版酒馆</title>
+  <title>Lite Tavern · 修复版</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
@@ -17,7 +17,7 @@
       --char-msg-bg: #27272a;
       --border: #404040;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans SC', sans-serif; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans SC', sans-serif; -webkit-tap-highlight-color: transparent; }
     body { background: var(--bg-color); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
 
     /* 侧边栏 (设置) */
@@ -25,33 +25,47 @@
       width: 300px; background: var(--sidebar-bg); border-right: 1px solid var(--border);
       display: flex; flex-direction: column; padding: 16px; overflow-y: auto;
       transition: transform 0.3s ease; z-index: 100;
+      position: absolute; height: 100%; top: 0; left: 0;
     }
-    .sidebar.closed { transform: translateX(-100%); position: absolute; height: 100%; }
-    
-    /* 移动端适配侧边栏 */
-    @media (max-width: 768px) {
-      .sidebar { position: absolute; height: 100%; box-shadow: 4px 0 16px rgba(0,0,0,0.5); }
+    /* 默认关闭状态 (移动端优先) */
+    .sidebar.closed { transform: translateX(-100%); }
+    /* 桌面端默认行为在 JS 里控制，或者用媒体查询覆盖 */
+    @media (min-width: 769px) {
+      .sidebar { position: relative; transform: none; }
+      .sidebar.closed { transform: translateX(-100%); position: absolute; }
     }
 
     h2 { font-size: 16px; margin-bottom: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
     .group { margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
     label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+    
     input, textarea, select {
       width: 100%; background: #18181b; border: 1px solid #3f3f46; color: white;
-      padding: 8px; border-radius: 6px; font-size: 13px; outline: none; margin-bottom: 8px;
+      padding: 10px; border-radius: 6px; font-size: 14px; outline: none; margin-bottom: 8px;
     }
     input:focus, textarea:focus { border-color: var(--accent); }
     textarea { resize: vertical; min-height: 80px; }
 
+    /* 特殊输入框容器：用于 API Key */
+    .input-wrapper { position: relative; display: flex; align-items: center; }
+    .input-wrapper input { padding-right: 40px; margin-bottom: 0; }
+    .toggle-eye {
+      position: absolute; right: 0; top: 0; bottom: 0; width: 40px;
+      background: none; border: none; color: var(--text-dim); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    /* CSS 遮罩类：不改变 input type="text"，只改变视觉显示 */
+    .masked-text { -webkit-text-security: disc; }
+
     /* 聊天主区域 */
-    .main { flex: 1; display: flex; flex-direction: column; position: relative; background-image: radial-gradient(#2a2a2a 1px, transparent 1px); background-size: 20px 20px; }
+    .main { flex: 1; display: flex; flex-direction: column; position: relative; width: 100%; height: 100%; }
     
     /* 顶部导航 */
     .header {
       height: 50px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px;
-      background: rgba(30,30,30,0.9); backdrop-filter: blur(10px); justify-content: space-between;
+      background: rgba(30,30,30,0.95); justify-content: space-between; flex-shrink: 0;
     }
-    .btn-icon { background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 4px; }
+    .btn-icon { background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 8px; }
     
     /* 聊天记录列表 */
     #chatList { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
@@ -62,8 +76,8 @@
     .avatar { width: 40px; height: 40px; border-radius: 50%; background: #333; object-fit: cover; flex-shrink: 0; }
     .bubble {
       background: var(--char-msg-bg); padding: 12px 16px; border-radius: 12px;
-      line-height: 1.6; font-size: 14px; position: relative; white-space: pre-wrap;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      line-height: 1.6; font-size: 15px; position: relative; white-space: pre-wrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2); word-break: break-word;
     }
     .msg.user .bubble { background: var(--user-msg-bg); border-top-right-radius: 2px; }
     .msg.char .bubble { border-top-left-radius: 2px; }
@@ -72,16 +86,17 @@
 
     /* 底部输入框 */
     .input-area {
-      padding: 16px; background: var(--chat-bg); border-top: 1px solid var(--border);
+      padding: 12px; background: var(--chat-bg); border-top: 1px solid var(--border);
       display: flex; gap: 10px; align-items: flex-end; max-width: 900px; margin: 0 auto; width: 100%;
+      flex-shrink: 0; /* 防止被压缩 */
     }
     #userInput {
       flex: 1; background: #27272a; border: none; padding: 12px; border-radius: 8px;
-      max-height: 150px; overflow-y: auto;
+      max-height: 120px; overflow-y: auto; font-size: 16px; /* 防止 iOS 缩放 */
     }
     #sendBtn {
-      background: var(--accent); color: white; border: none; padding: 0 20px; height: 42px;
-      border-radius: 8px; font-weight: bold; cursor: pointer; transition: opacity 0.2s;
+      background: var(--accent); color: white; border: none; padding: 0 16px; height: 44px;
+      border-radius: 8px; font-weight: bold; cursor: pointer; transition: opacity 0.2s; white-space: nowrap;
     }
     #sendBtn:disabled { opacity: 0.5; cursor: not-allowed; }
     
@@ -94,21 +109,26 @@
 
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
     
-    /* 状态提示 */
     .typing-indicator { font-size: 12px; color: var(--text-dim); margin-left: 54px; margin-bottom: 10px; height: 20px; }
   </style>
 </head>
 <body>
 
   <!-- 侧边栏：设置 -->
-  <div class="sidebar" id="sidebar">
+  <div class="sidebar closed" id="sidebar">
     <div class="group">
       <h2>API 设置</h2>
       <label>API 地址 (Base URL)</label>
       <input type="text" id="apiUrl" placeholder="https://api.openai.com/v1" />
-      <label>API Key</label>
-      <input type="password" id="apiKey" placeholder="sk-..." />
-      <label>模型 (Model)</label>
+      
+      <label>API Key (明文/遮罩)</label>
+      <div class="input-wrapper">
+        <!-- 核心修改：使用 type="text" 避免加密键盘，配合 CSS 遮罩 -->
+        <input type="text" id="apiKey" class="masked-text" placeholder="sk-..." />
+        <button class="toggle-eye" id="toggleKeyVis" type="button">👁️</button>
+      </div>
+      
+      <label style="margin-top:8px">模型 (Model)</label>
       <input type="text" id="modelName" value="gpt-3.5-turbo" />
     </div>
 
@@ -129,7 +149,7 @@
     </div>
 
     <div style="margin-top:auto">
-      <button onclick="clearChat()" style="width:100%;padding:10px;background:#ef4444;border:none;border-radius:6px;color:white">清空聊天记录</button>
+      <button onclick="clearChat()" style="width:100%;padding:12px;background:#ef4444;border:none;border-radius:6px;color:white;font-weight:bold">清空聊天记录</button>
     </div>
   </div>
   
@@ -139,17 +159,16 @@
   <div class="main">
     <div class="header">
       <button class="btn-icon" id="toggleSidebar">☰</button>
-      <span style="font-weight:600;font-size:14px" id="headerTitle">Lite Tavern</span>
+      <span style="font-weight:600;font-size:15px" id="headerTitle">Lite Tavern</span>
       <div style="width:24px"></div>
     </div>
 
     <div id="chatList">
-      <!-- 消息会在这里生成 -->
       <div class="msg char">
         <div class="avatar" style="background:var(--accent)"></div>
         <div>
           <div class="msg-name">System</div>
-          <div class="bubble">欢迎来到 Lite Tavern！请点击左上角菜单配置 API 和角色设定。</div>
+          <div class="bubble">欢迎！点击左上角 ☰ 设置 API。</div>
         </div>
       </div>
     </div>
@@ -168,8 +187,17 @@
   
   // 状态管理
   const state = {
-    messages: [], // 聊天记录
-    isSidebarOpen: window.innerWidth > 768
+    messages: [],
+    isSidebarOpen: false // 默认关闭，防止手机端加载时闪烁
+  };
+
+  // 0. 修复 API Key 显示逻辑
+  const apiKeyInput = $('apiKey');
+  const toggleEye = $('toggleKeyVis');
+  toggleEye.onclick = () => {
+    // 切换 CSS 类来实现遮罩/明文，不改变 input type，从而不唤起安全键盘
+    apiKeyInput.classList.toggle('masked-text');
+    toggleEye.textContent = apiKeyInput.classList.contains('masked-text') ? '👁️' : '🔓';
   };
 
   // 1. 初始化与配置加载
@@ -192,14 +220,19 @@
     }
     
     updateHeader();
-    handleResize();
+    
+    // 桌面端默认打开侧边栏
+    if(window.innerWidth > 768) {
+      state.isSidebarOpen = true;
+      updateSidebarUI();
+    }
   }
 
   function updateHeader() {
     $('headerTitle').textContent = $('charName').value || 'Lite Tavern';
   }
 
-  // 2. 界面交互
+  // 2. 界面交互 (核心修复：移除 resize 监听中的自动关闭逻辑)
   const sidebar = $('sidebar');
   const overlay = $('overlay');
   
@@ -216,6 +249,7 @@
   function updateSidebarUI() {
     if(state.isSidebarOpen) {
       sidebar.classList.remove('closed');
+      // 只有在小屏幕时才显示遮罩
       if(window.innerWidth <= 768) overlay.classList.add('active');
     } else {
       sidebar.classList.add('closed');
@@ -223,15 +257,19 @@
     }
   }
   
-  function handleResize() {
-    if(window.innerWidth <= 768) {
-      state.isSidebarOpen = false;
-    } else {
-      state.isSidebarOpen = true;
+  // 仅在窗口宽度发生剧烈变化（横竖屏切换）时才调整侧边栏，键盘弹出导致的微小变化忽略
+  let lastWidth = window.innerWidth;
+  window.addEventListener('resize', () => {
+    if (window.innerWidth !== lastWidth) {
+      lastWidth = window.innerWidth;
+      if(window.innerWidth > 768) {
+        state.isSidebarOpen = true; // 大屏自动开
+      } else {
+        state.isSidebarOpen = false; // 小屏自动关
+      }
+      updateSidebarUI();
     }
-    updateSidebarUI();
-  }
-  window.addEventListener('resize', handleResize);
+  });
 
   // 3. 聊天渲染
   function renderHistory() {
@@ -244,7 +282,7 @@
   function appendMsgToDOM(msg) {
     const isUser = msg.role === 'user';
     const name = isUser ? $('userName').value : $('charName').value;
-    const avatarUrl = isUser ? '' : $('charAvatar').value; // 用户暂无头像设置，用默认
+    const avatarUrl = isUser ? '' : $('charAvatar').value; 
     
     const div = document.createElement('div');
     div.className = `msg ${isUser ? 'user' : 'char'}`;
@@ -256,7 +294,7 @@
 
     div.innerHTML = `
       ${avatarHtml}
-      <div style="max-width:80%">
+      <div style="max-width:85%">
         <div class="msg-name">${name}</div>
         <div class="bubble">${escapeHtml(msg.content)}</div>
       </div>
@@ -266,57 +304,59 @@
 
   function scrollToBottom() {
     const list = $('chatList');
-    list.scrollTop = list.scrollHeight;
+    setTimeout(() => list.scrollTop = list.scrollHeight, 50);
   }
   
   function escapeHtml(text) {
+    if(!text) return '';
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
   }
 
   // 4. 发送逻辑
   $('sendBtn').onclick = sendMessage;
   
-  // 简单的 Textarea 自适应高度
-  $('userInput').addEventListener('input', function() {
+  // 优化 Textarea 体验
+  const userInput = $('userInput');
+  userInput.addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = (this.scrollHeight) + 'px';
   });
+  // 监听回车发送（手机上通常是换行，这里为了方便不做 Enter 发送，只用按钮）
 
   async function sendMessage() {
-    const input = $('userInput');
-    const text = input.value.trim();
+    const text = userInput.value.trim();
     if(!text) return;
 
     const apiKey = $('apiKey').value.trim();
     let apiUrl = $('apiUrl').value.trim();
     
-    if(!apiKey) { alert('请先在侧边栏填写 API Key'); return; }
-    if(!apiUrl) { alert('请先填写 API 地址'); return; }
+    if(!apiKey) { alert('请先在侧边栏填写 API Key'); $('toggleSidebar').click(); return; }
+    if(!apiUrl) { alert('请先填写 API 地址'); $('toggleSidebar').click(); return; }
 
     // URL 修正
     if(apiUrl.endsWith('/')) apiUrl = apiUrl.slice(0, -1);
-    if(!apiUrl.includes('/chat/completions')) apiUrl += '/chat/completions';
+    if(!apiUrl.includes('/chat/completions')) {
+        // 如果用户只填了域名，自动补全
+        if(!apiUrl.includes('/v1')) apiUrl += '/v1';
+        apiUrl += '/chat/completions';
+    }
 
-    // 1. 添加用户消息
     const userMsg = { role: 'user', content: text };
     state.messages.push(userMsg);
     appendMsgToDOM(userMsg);
     saveHistory();
     
-    input.value = '';
-    input.style.height = 'auto';
+    userInput.value = '';
+    userInput.style.height = 'auto';
     scrollToBottom();
     
-    // 2. 准备请求上下文
     const systemPrompt = $('charPersona').value.trim();
     const context = [];
     if(systemPrompt) context.push({ role: 'system', content: systemPrompt });
     
-    // 简单的上下文截断（防止超长），取最后 20 条
     const historyToSend = state.messages.slice(-20); 
     context.push(...historyToSend);
 
-    // 3. 发送请求
     $('sendBtn').disabled = true;
     $('typingIndicator').textContent = $('charName').value + ' 正在输入...';
 
@@ -331,13 +371,13 @@
           model: $('modelName').value.trim(),
           messages: context,
           temperature: 0.8,
-          max_tokens: 500 // 防止回复太长
+          max_tokens: 1000 // 增加 token 限制
         })
       });
 
       if(!res.ok) {
         const errTxt = await res.text();
-        throw new Error(`Error ${res.status}: ${errTxt}`);
+        throw new Error(`HTTP ${res.status}: ${errTxt}`);
       }
 
       const data = await res.json();
@@ -349,8 +389,13 @@
       saveHistory();
 
     } catch(e) {
-      alert('请求失败: ' + e.message);
-      // 如果失败，把刚才用户的消息也删掉，或者提示重试（这里简单处理不删，方便复制）
+      const errDiv = document.createElement('div');
+      errDiv.style.color = '#ef4444';
+      errDiv.style.textAlign = 'center';
+      errDiv.style.fontSize = '12px';
+      errDiv.style.margin = '10px 0';
+      errDiv.textContent = '发送失败: ' + e.message;
+      $('chatList').appendChild(errDiv);
     } finally {
       $('sendBtn').disabled = false;
       $('typingIndicator').textContent = '';
@@ -367,10 +412,13 @@
       state.messages = [];
       saveHistory();
       renderHistory();
+      if(window.innerWidth <= 768) {
+          state.isSidebarOpen = false;
+          updateSidebarUI();
+      }
     }
   };
 
-  // 启动
   loadConfig();
 })();
 </script>
