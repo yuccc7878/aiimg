@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-  <title>Lite Tavern · 修复版</title>
+  <title>Lite Tavern · 模型列表版</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
@@ -20,16 +20,14 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans SC', sans-serif; -webkit-tap-highlight-color: transparent; }
     body { background: var(--bg-color); color: var(--text); height: 100vh; display: flex; overflow: hidden; }
 
-    /* 侧边栏 (设置) */
+    /* 侧边栏 */
     .sidebar {
       width: 300px; background: var(--sidebar-bg); border-right: 1px solid var(--border);
       display: flex; flex-direction: column; padding: 16px; overflow-y: auto;
       transition: transform 0.3s ease; z-index: 100;
       position: absolute; height: 100%; top: 0; left: 0;
     }
-    /* 默认关闭状态 (移动端优先) */
     .sidebar.closed { transform: translateX(-100%); }
-    /* 桌面端默认行为在 JS 里控制，或者用媒体查询覆盖 */
     @media (min-width: 769px) {
       .sidebar { position: relative; transform: none; }
       .sidebar.closed { transform: translateX(-100%); position: absolute; }
@@ -43,10 +41,10 @@
       width: 100%; background: #18181b; border: 1px solid #3f3f46; color: white;
       padding: 10px; border-radius: 6px; font-size: 14px; outline: none; margin-bottom: 8px;
     }
-    input:focus, textarea:focus { border-color: var(--accent); }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
     textarea { resize: vertical; min-height: 80px; }
 
-    /* 特殊输入框容器：用于 API Key */
+    /* API Key 输入框容器 */
     .input-wrapper { position: relative; display: flex; align-items: center; }
     .input-wrapper input { padding-right: 40px; margin-bottom: 0; }
     .toggle-eye {
@@ -54,23 +52,31 @@
       background: none; border: none; color: var(--text-dim); cursor: pointer;
       display: flex; align-items: center; justify-content: center; font-size: 18px;
     }
-    /* CSS 遮罩类：不改变 input type="text"，只改变视觉显示 */
     .masked-text { -webkit-text-security: disc; }
+
+    /* 模型选择区域样式 */
+    .model-row { display: flex; gap: 8px; align-items: flex-start; }
+    .model-row select, .model-row input { flex: 1; margin-bottom: 0; }
+    .btn-refresh {
+      width: 42px; height: 42px; padding: 0; background: #3f3f46; border: 1px solid #52525b;
+      border-radius: 6px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 18px;
+    }
+    .btn-refresh:active { background: var(--accent); border-color: var(--accent); }
+    .btn-refresh.spinning { animation: spin 1s linear infinite; pointer-events: none; opacity: 0.7; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
 
     /* 聊天主区域 */
     .main { flex: 1; display: flex; flex-direction: column; position: relative; width: 100%; height: 100%; }
     
-    /* 顶部导航 */
     .header {
       height: 50px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px;
       background: rgba(30,30,30,0.95); justify-content: space-between; flex-shrink: 0;
     }
     .btn-icon { background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 8px; }
     
-    /* 聊天记录列表 */
     #chatList { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
     
-    /* 消息气泡 */
     .msg { display: flex; gap: 12px; max-width: 800px; margin: 0 auto; width: 100%; animation: fadeIn 0.3s ease; }
     .msg.user { flex-direction: row-reverse; }
     .avatar { width: 40px; height: 40px; border-radius: 50%; background: #333; object-fit: cover; flex-shrink: 0; }
@@ -84,15 +90,14 @@
     .msg-name { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
     .msg.user .msg-name { text-align: right; }
 
-    /* 底部输入框 */
     .input-area {
       padding: 12px; background: var(--chat-bg); border-top: 1px solid var(--border);
       display: flex; gap: 10px; align-items: flex-end; max-width: 900px; margin: 0 auto; width: 100%;
-      flex-shrink: 0; /* 防止被压缩 */
+      flex-shrink: 0; 
     }
     #userInput {
       flex: 1; background: #27272a; border: none; padding: 12px; border-radius: 8px;
-      max-height: 120px; overflow-y: auto; font-size: 16px; /* 防止 iOS 缩放 */
+      max-height: 120px; overflow-y: auto; font-size: 16px; 
     }
     #sendBtn {
       background: var(--accent); color: white; border: none; padding: 0 16px; height: 44px;
@@ -100,7 +105,6 @@
     }
     #sendBtn:disabled { opacity: 0.5; cursor: not-allowed; }
     
-    /* 遮罩层 (移动端用) */
     .overlay {
       position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5);
       z-index: 90; display: none;
@@ -114,7 +118,7 @@
 </head>
 <body>
 
-  <!-- 侧边栏：设置 -->
+  <!-- 侧边栏 -->
   <div class="sidebar closed" id="sidebar">
     <div class="group">
       <h2>API 设置</h2>
@@ -123,13 +127,23 @@
       
       <label>API Key (明文/遮罩)</label>
       <div class="input-wrapper">
-        <!-- 核心修改：使用 type="text" 避免加密键盘，配合 CSS 遮罩 -->
         <input type="text" id="apiKey" class="masked-text" placeholder="sk-..." />
         <button class="toggle-eye" id="toggleKeyVis" type="button">👁️</button>
       </div>
       
       <label style="margin-top:8px">模型 (Model)</label>
-      <input type="text" id="modelName" value="gpt-3.5-turbo" />
+      <div class="model-row">
+        <!-- 这里是下拉菜单，如果选择自定义，会变成输入框 -->
+        <select id="modelSelect">
+            <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+            <option value="gpt-4o">gpt-4o</option>
+            <option value="custom">✎ 自定义 (手动输入)...</option>
+        </select>
+        <!-- 备用输入框，默认隐藏 -->
+        <input type="text" id="modelInput" class="hidden" style="display:none" placeholder="输入模型ID..." />
+        
+        <button class="btn-refresh" id="fetchModelsBtn" title="拉取模型列表">🔄</button>
+      </div>
     </div>
 
     <div class="group">
@@ -168,7 +182,7 @@
         <div class="avatar" style="background:var(--accent)"></div>
         <div>
           <div class="msg-name">System</div>
-          <div class="bubble">欢迎！点击左上角 ☰ 设置 API。</div>
+          <div class="bubble">欢迎！点击左上角 ☰ 设置 API，点击 🔄 可拉取模型列表。</div>
         </div>
       </div>
     </div>
@@ -180,7 +194,6 @@
       <button id="sendBtn">发送</button>
     </div>
   </div>
-
 <script>
 (() => {
   const $ = id => document.getElementById(id);
@@ -188,20 +201,20 @@
   // 状态管理
   const state = {
     messages: [],
-    isSidebarOpen: false // 默认关闭，防止手机端加载时闪烁
+    isSidebarOpen: false
   };
 
-  // 0. 修复 API Key 显示逻辑
+  // 0. API Key 遮罩切换
   const apiKeyInput = $('apiKey');
   const toggleEye = $('toggleKeyVis');
   toggleEye.onclick = () => {
-    // 切换 CSS 类来实现遮罩/明文，不改变 input type，从而不唤起安全键盘
     apiKeyInput.classList.toggle('masked-text');
     toggleEye.textContent = apiKeyInput.classList.contains('masked-text') ? '👁️' : '🔓';
   };
 
   // 1. 初始化与配置加载
-  const CONFIG_IDS = ['apiUrl', 'apiKey', 'modelName', 'charName', 'charAvatar', 'charPersona', 'userName'];
+  // 注意：modelInput 是实际存储模型名的地方，modelSelect 是 UI 辅助
+  const CONFIG_IDS = ['apiUrl', 'apiKey', 'modelInput', 'charName', 'charAvatar', 'charPersona', 'userName'];
   
   function loadConfig() {
     CONFIG_IDS.forEach(id => {
@@ -212,7 +225,10 @@
         if(id === 'charName') updateHeader();
       });
     });
-    
+
+    // 同步 Select 和 Input 的状态
+    syncModelUI();
+
     const savedMsgs = localStorage.getItem('tavern_history');
     if(savedMsgs) {
       state.messages = JSON.parse(savedMsgs);
@@ -221,18 +237,137 @@
     
     updateHeader();
     
-    // 桌面端默认打开侧边栏
     if(window.innerWidth > 768) {
       state.isSidebarOpen = true;
       updateSidebarUI();
     }
   }
 
+  // 模型 UI 同步逻辑
+  const modelSelect = $('modelSelect');
+  const modelInput = $('modelInput');
+
+  // 当下拉框改变时
+  modelSelect.addEventListener('change', () => {
+    if(modelSelect.value === 'custom') {
+      modelSelect.style.display = 'none';
+      modelInput.style.display = 'block';
+      modelInput.focus();
+    } else {
+      modelInput.value = modelSelect.value;
+      localStorage.setItem('tavern_modelInput', modelSelect.value); // 保存
+    }
+  });
+
+  // 当输入框改变时（用户手动输入了自定义模型）
+  modelInput.addEventListener('change', () => {
+    localStorage.setItem('tavern_modelInput', modelInput.value);
+  });
+
+  function syncModelUI() {
+    const currentModel = modelInput.value;
+    // 检查当前模型是否在下拉列表中
+    let found = false;
+    for(let opt of modelSelect.options) {
+      if(opt.value === currentModel) {
+        modelSelect.value = currentModel;
+        found = true;
+        break;
+      }
+    }
+    // 如果不在列表中，或者列表还没加载，且当前有值，显示输入框？
+    // 为了简洁，我们默认显示下拉框。如果用户之前存的是自定义的，我们加一个临时选项
+    if(currentModel && !found) {
+       const opt = document.createElement('option');
+       opt.value = currentModel;
+       opt.textContent = currentModel + ' (当前)';
+       modelSelect.insertBefore(opt, modelSelect.firstChild);
+       modelSelect.value = currentModel;
+    }
+  }
+
+  // --- 拉取模型列表核心逻辑 ---
+  $('fetchModelsBtn').onclick = async () => {
+    const btn = $('fetchModelsBtn');
+    const apiKey = $('apiKey').value.trim();
+    let apiUrl = $('apiUrl').value.trim();
+
+    if(!apiKey || !apiUrl) { alert('请先填写 API 地址和 Key'); return; }
+
+    btn.classList.add('spinning'); // 旋转动画
+    
+    // 构造 /models 接口地址
+    if(apiUrl.endsWith('/')) apiUrl = apiUrl.slice(0, -1);
+    // 如果用户填的是 /chat/completions 结尾，去掉它
+    if(apiUrl.includes('/chat/completions')) {
+        apiUrl = apiUrl.split('/chat/completions')[0];
+    }
+    // 确保有 /v1 (如果用户只填了域名)
+    if(!apiUrl.includes('/v1')) apiUrl += '/v1';
+    
+    const modelsUrl = apiUrl + '/models';
+
+    try {
+        const res = await fetch(modelsUrl, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+
+        if(!res.ok) throw new Error('HTTP ' + res.status);
+
+        const data = await res.json();
+        const list = data.data || [];
+        
+        if(list.length === 0) throw new Error('未找到模型数据');
+
+        // 清空旧选项
+        modelSelect.innerHTML = '';
+        
+        // 排序：让 gpt-4 或 deepseek 等常用模型排前面
+        list.sort((a, b) => a.id.localeCompare(b.id));
+
+        list.forEach(item => {
+            const opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.id;
+            modelSelect.appendChild(opt);
+        });
+
+        // 加上自定义选项
+        const customOpt = document.createElement('option');
+        customOpt.value = 'custom';
+        customOpt.textContent = '✎ 自定义 (手动输入)...';
+        modelSelect.appendChild(customOpt);
+
+        // 恢复 UI 状态
+        modelSelect.style.display = 'block';
+        modelInput.style.display = 'none';
+        
+        // 自动选中列表第一个
+        if(list.length > 0) {
+            modelSelect.value = list[0].id;
+            modelInput.value = list[0].id;
+            localStorage.setItem('tavern_modelInput', list[0].id);
+        }
+
+        alert(`成功拉取 ${list.length} 个模型！`);
+
+    } catch(e) {
+        alert('拉取失败: ' + e.message + '\n请检查 API 地址是否支持 /v1/models 接口，或者直接使用自定义输入。');
+        // 失败时切换回输入框模式，方便用户手打
+        modelSelect.value = 'custom';
+        modelSelect.dispatchEvent(new Event('change'));
+    } finally {
+        btn.classList.remove('spinning');
+    }
+  };
+
+
   function updateHeader() {
     $('headerTitle').textContent = $('charName').value || 'Lite Tavern';
   }
 
-  // 2. 界面交互 (核心修复：移除 resize 监听中的自动关闭逻辑)
+  // 2. 界面交互
   const sidebar = $('sidebar');
   const overlay = $('overlay');
   
@@ -249,7 +384,6 @@
   function updateSidebarUI() {
     if(state.isSidebarOpen) {
       sidebar.classList.remove('closed');
-      // 只有在小屏幕时才显示遮罩
       if(window.innerWidth <= 768) overlay.classList.add('active');
     } else {
       sidebar.classList.add('closed');
@@ -257,15 +391,14 @@
     }
   }
   
-  // 仅在窗口宽度发生剧烈变化（横竖屏切换）时才调整侧边栏，键盘弹出导致的微小变化忽略
   let lastWidth = window.innerWidth;
   window.addEventListener('resize', () => {
     if (window.innerWidth !== lastWidth) {
       lastWidth = window.innerWidth;
       if(window.innerWidth > 768) {
-        state.isSidebarOpen = true; // 大屏自动开
+        state.isSidebarOpen = true; 
       } else {
-        state.isSidebarOpen = false; // 小屏自动关
+        state.isSidebarOpen = false; 
       }
       updateSidebarUI();
     }
@@ -315,13 +448,11 @@
   // 4. 发送逻辑
   $('sendBtn').onclick = sendMessage;
   
-  // 优化 Textarea 体验
   const userInput = $('userInput');
   userInput.addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = (this.scrollHeight) + 'px';
   });
-  // 监听回车发送（手机上通常是换行，这里为了方便不做 Enter 发送，只用按钮）
 
   async function sendMessage() {
     const text = userInput.value.trim();
@@ -329,14 +460,15 @@
 
     const apiKey = $('apiKey').value.trim();
     let apiUrl = $('apiUrl').value.trim();
+    // 使用 modelInput 的值，因为它才是最终的数据源
+    const model = $('modelInput').value.trim();
     
-    if(!apiKey) { alert('请先在侧边栏填写 API Key'); $('toggleSidebar').click(); return; }
+    if(!apiKey) { alert('请先填写 API Key'); $('toggleSidebar').click(); return; }
     if(!apiUrl) { alert('请先填写 API 地址'); $('toggleSidebar').click(); return; }
+    if(!model) { alert('请选择或填写模型名称'); $('toggleSidebar').click(); return; }
 
-    // URL 修正
     if(apiUrl.endsWith('/')) apiUrl = apiUrl.slice(0, -1);
     if(!apiUrl.includes('/chat/completions')) {
-        // 如果用户只填了域名，自动补全
         if(!apiUrl.includes('/v1')) apiUrl += '/v1';
         apiUrl += '/chat/completions';
     }
@@ -368,10 +500,10 @@
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: $('modelName').value.trim(),
+          model: model,
           messages: context,
           temperature: 0.8,
-          max_tokens: 1000 // 增加 token 限制
+          max_tokens: 1000 
         })
       });
 
